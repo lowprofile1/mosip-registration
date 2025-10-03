@@ -48,9 +48,37 @@ jobs:
             registration-processor/*/target/*.war
           retention-days: 1
 
+  # Download artifacts once for all services
+  download-artifacts:
+    needs: build-maven
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Maven artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: maven-artifacts
+          path: ./artifacts
+
+      - name: List downloaded artifacts
+        run: |
+          echo "Artifacts directory structure:"
+          find ./artifacts -type f -name "*.jar" | head -20
+          echo "Total JAR files found:"
+          find ./artifacts -type f -name "*.jar" | wc -l
+
+      - name: Upload artifacts for Docker builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-artifacts-for-docker
+          path: ./artifacts
+          retention-days: 1
+
   # Build and push Docker images for core services
   build-and-push:
-    needs: build-maven
+    needs: [build-maven, download-artifacts]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -74,15 +102,8 @@ jobs:
       - name: Download Maven artifacts
         uses: actions/download-artifact@v4
         with:
-          name: maven-artifacts
+          name: maven-artifacts-for-docker
           path: ./artifacts
-
-      - name: List downloaded artifacts
-        run: |
-          echo "Artifacts directory structure:"
-          find ./artifacts -type f -name "*.jar" | head -20
-          echo "Total JAR files found:"
-          find ./artifacts -type f -name "*.jar" | wc -l
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -102,21 +123,14 @@ jobs:
           mkdir -p ./target
 
           # Find the main JAR file (not javadoc or sources)
-          # Artifacts are downloaded to ./artifacts relative to repo root
           JAR_FILE=$(find ../../artifacts -name "*${{ matrix.service_name }}*.jar" | grep -v javadoc | grep -v sources | head -1)
           
           if [ -z "$JAR_FILE" ]; then
             echo "No JAR file found for ${{ matrix.service_name }}"
             echo "Available files in artifacts directory:"
             find ../../artifacts -name "*${{ matrix.service_name }}*" -type f 2>/dev/null || echo "Artifacts directory not found at ../../artifacts"
-            echo "Checking ./artifacts from repo root:"
-            find ./artifacts -name "*${{ matrix.service_name }}*" -type f 2>/dev/null || echo "Artifacts directory not found at ./artifacts"
-            echo "All files in current directory:"
-            ls -la
-            echo "All files in parent directory:"
-            ls -la ../
-            echo "All files in grandparent directory:"
-            ls -la ../../
+            echo "All files in artifacts directory:"
+            find ../../artifacts -type f -name "*.jar" 2>/dev/null || echo "No JAR files found"
             exit 1
           fi
 
