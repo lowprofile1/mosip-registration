@@ -1,0 +1,114 @@
+name: Build and Push to ECR (Direct)
+
+on:
+  push:
+    branches: [master, develop, main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 921436147132.dkr.ecr.us-east-1.amazonaws.com
+  MAVEN_OPTS: -Dmaven.repo.local=.m2/repository
+
+jobs:
+  # Build and push Docker images directly (build JARs in each job)
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service_name: registration-processor-workflow-manager-service
+            service_path: registration-processor/workflow-engine/registration-processor-workflow-manager-service
+            port: 8081
+          - service_name: registration-processor-stage-group-1
+            service_path: registration-processor/stage-groups/registration-processor-stage-group-1
+            port: 8081
+          - service_name: registration-processor-registration-status-service
+            service_path: registration-processor/init/registration-processor-registration-status-service
+            port: 8081
+          - service_name: registration-processor-notification-service
+            service_path: registration-processor/registration-processor-notification-service
+            port: 8081
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: "11"
+          distribution: "temurin"
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Build Maven project
+        working-directory: ./registration-processor
+        run: |
+          mvn clean compile -DskipTests
+          mvn package -DskipTests
+
+      - name: Verify JAR file exists
+        run: |
+          echo "Looking for JAR file for ${{ matrix.service_name }}"
+          find ./registration-processor -name "*${{ matrix.service_name }}*.jar" -type f | grep -v javadoc | grep -v sources
+          JAR_FILE=$(find ./registration-processor -name "*${{ matrix.service_name }}*.jar" -type f | grep -v javadoc | grep -v sources | head -1)
+          if [ -z "$JAR_FILE" ]; then
+            echo "No JAR file found for ${{ matrix.service_name }}"
+            echo "Available JAR files:"
+            find ./registration-processor -name "*.jar" -type f | head -20
+            exit 1
+          fi
+          echo "Found JAR file: $JAR_FILE"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push Docker image
+        working-directory: ./${{ matrix.service_path }}
+        run: |
+          # Create target directory if it doesn't exist
+          mkdir -p ./target
+
+          # Find the main JAR file (not javadoc or sources)
+          JAR_FILE=$(find ../../registration-processor -name "*${{ matrix.service_name }}*.jar" -type f | grep -v javadoc | grep -v sources | head -1)
+          
+          if [ -z "$JAR_FILE" ]; then
+            echo "No JAR file found for ${{ matrix.service_name }}"
+            echo "Available JAR files:"
+            find ../../registration-processor -name "*.jar" -type f | head -20
+            exit 1
+          fi
+
+          echo "Found JAR file: $JAR_FILE"
+
+          # Copy JAR to current directory
+          cp "$JAR_FILE" ./target/
+
+          # List files in target directory for debugging
+          echo "Files in target directory:"
+          ls -la ./target/
+
+          # Build Docker image
+          docker build -t ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}:${{ github.sha }} .
+          docker build -t ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}:latest .
+
+          # Push to ECR
+          docker push ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}:${{ github.sha }}
+          docker push ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}:latest
+
+          echo "Successfully built and pushed ${{ matrix.service_name }}"
