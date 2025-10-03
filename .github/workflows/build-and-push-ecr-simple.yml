@@ -91,25 +91,34 @@ jobs:
       - name: Build, tag, and push Docker image
         working-directory: ./${{ matrix.service_path }}
         run: |
-          # Find the JAR file
-          JAR_FILE=$(find ../../artifacts -name "*${{ matrix.service_name }}*.jar" | head -1)
-
+          # Create target directory if it doesn't exist
+          mkdir -p ./target
+          
+          # Find the main JAR file (not javadoc or sources)
+          JAR_FILE=$(find ../../artifacts -name "*${{ matrix.service_name }}*.jar" | grep -v javadoc | grep -v sources | head -1)
+          
           if [ -z "$JAR_FILE" ]; then
             echo "No JAR file found for ${{ matrix.service_name }}"
+            echo "Available files:"
+            find ../../artifacts -name "*${{ matrix.service_name }}*" -type f
             exit 1
           fi
-
+          
           echo "Found JAR file: $JAR_FILE"
-
+          
           # Copy JAR to current directory
           cp "$JAR_FILE" ./target/
-
+          
+          # List files in target directory for debugging
+          echo "Files in target directory:"
+          ls -la ./target/
+          
           # Build Docker image
           docker build -t ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}:${{ github.sha }} .
           docker build -t ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}:latest .
-
+          
           # Push to ECR
           docker push ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}:${{ github.sha }}
           docker push ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}:latest
-
+          
           echo "Successfully built and pushed ${{ matrix.service_name }}"
