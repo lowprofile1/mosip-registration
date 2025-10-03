@@ -24,7 +24,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  EKS_CLUSTER_NAME: mosip-ida-dev
+  EKS_CLUSTER_NAME: mosip-ida-dev-cluster
   ECR_REGISTRY: 921436147132.dkr.ecr.us-east-1.amazonaws.com
 
 jobs:
