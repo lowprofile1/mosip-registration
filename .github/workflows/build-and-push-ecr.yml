@@ -84,31 +84,31 @@ jobs:
           aws ecr create-repository --repository-name mosip-${{ matrix.service_name }} --region ${{ env.AWS_REGION }}
 
       - name: Build and push Docker image
-        working-directory: ./${{ matrix.service_path }}
         run: |
           # Create target directory if it doesn't exist
-          mkdir -p ./target
+          mkdir -p ./${{ matrix.service_path }}/target
 
           # Find the main JAR file (not javadoc or sources)
-          JAR_FILE=$(find ../../registration-processor -name "*${{ matrix.service_name }}*.jar" -type f | grep -v javadoc | grep -v sources | head -1)
+          JAR_FILE=$(find ./registration-processor -name "*${{ matrix.service_name }}*.jar" -type f | grep -v javadoc | grep -v sources | head -1)
           
           if [ -z "$JAR_FILE" ]; then
             echo "No JAR file found for ${{ matrix.service_name }}"
             echo "Available JAR files:"
-            find ../../registration-processor -name "*.jar" -type f | head -20
+            find ./registration-processor -name "*.jar" -type f | head -20
             exit 1
           fi
 
           echo "Found JAR file: $JAR_FILE"
 
-          # Copy JAR to current directory
-          cp "$JAR_FILE" ./target/
+          # Copy JAR to service target directory
+          cp "$JAR_FILE" ./${{ matrix.service_path }}/target/
 
           # List files in target directory for debugging
           echo "Files in target directory:"
-          ls -la ./target/
+          ls -la ./${{ matrix.service_path }}/target/
 
-          # Build Docker image
+          # Build Docker image from service directory
+          cd ./${{ matrix.service_path }}
           docker build -t ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}:${{ github.sha }} .
           docker build -t ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}:latest .
 
