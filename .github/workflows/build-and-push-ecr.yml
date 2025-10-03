@@ -1,0 +1,242 @@
+name: Build and Push to ECR
+
+on:
+  push:
+    branches: [master, develop, main]
+    paths:
+      - "registration-processor/**"
+      - ".github/workflows/build-and-push-ecr.yml"
+  pull_request:
+    branches: [master, develop, main]
+    paths:
+      - "registration-processor/**"
+      - ".github/workflows/build-and-push-ecr.yml"
+  workflow_dispatch:
+    inputs:
+      build_all_services:
+        description: "Build all services (true) or only changed services (false)"
+        required: false
+        default: "false"
+        type: boolean
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 921436147132.dkr.ecr.us-east-1.amazonaws.com
+  MAVEN_OPTS: -Dmaven.repo.local=.m2/repository
+
+jobs:
+  # Build Maven artifacts first
+  build-maven:
+    runs-on: ubuntu-latest
+    outputs:
+      services-to-build: ${{ steps.changes.outputs.services }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: "11"
+          distribution: "temurin"
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Build Maven project
+        working-directory: ./registration-processor
+        run: |
+          mvn clean compile -DskipTests
+          mvn package -DskipTests
+
+      - name: Detect changed services
+        id: changes
+        if: ${{ !inputs.build_all_services }}
+        run: |
+          # Get list of changed files
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          else
+            CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }})
+          fi
+
+          # Define all services
+          SERVICES=(
+            "registration-processor-registration-transaction-service:registration-processor/post-processor/registration-processor-registration-transaction-service"
+            "registration-processor-stage-group-1:registration-processor/stage-groups/registration-processor-stage-group-1"
+            "registration-processor-stage-group-2:registration-processor/stage-groups/registration-processor-stage-group-2"
+            "registration-processor-stage-group-3:registration-processor/stage-groups/registration-processor-stage-group-3"
+            "registration-processor-stage-group-4:registration-processor/stage-groups/registration-processor-stage-group-4"
+            "registration-processor-stage-group-5:registration-processor/stage-groups/registration-processor-stage-group-5"
+            "registration-processor-stage-group-6:registration-processor/stage-groups/registration-processor-stage-group-6"
+            "registration-processor-stage-group-7:registration-processor/stage-groups/registration-processor-stage-group-7"
+            "registration-processor-abis:registration-processor/core-processor/registration-processor-abis"
+            "registration-processor-reprocessor:registration-processor/workflow-engine/registration-processor-reprocessor"
+            "registration-processor-dmz-packet-server:registration-processor/init/registration-processor-dmz-packet-server"
+            "registration-processor-registration-status-service:registration-processor/init/registration-processor-registration-status-service"
+            "registration-processor-notification-service:registration-processor/registration-processor-notification-service"
+            "registration-processor-landing-zone:registration-processor/registration-processor-landing-zone"
+            "registration-processor-workflow-manager-service:registration-processor/workflow-engine/registration-processor-workflow-manager-service"
+            "registration-processor-common-camel-bridge:registration-processor/registration-processor-common-camel-bridge"
+          )
+
+          # Check which services have changes
+          CHANGED_SERVICES=""
+          for service_info in "${SERVICES[@]}"; do
+            SERVICE_NAME="${service_info%%:*}"
+            SERVICE_PATH="${service_info##*:}"
+            
+            if echo "$CHANGED_FILES" | grep -q "^$SERVICE_PATH/"; then
+              CHANGED_SERVICES="$CHANGED_SERVICES $SERVICE_NAME"
+            fi
+          done
+
+          # If no specific changes, build all services
+          if [ -z "$CHANGED_SERVICES" ]; then
+            CHANGED_SERVICES="all"
+          fi
+
+          echo "services=$CHANGED_SERVICES" >> $GITHUB_OUTPUT
+          echo "Changed services: $CHANGED_SERVICES"
+
+      - name: Set all services for build
+        id: all-services
+        if: ${{ inputs.build_all_services }}
+        run: |
+          echo "services=all" >> $GITHUB_OUTPUT
+
+      - name: Upload Maven artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-artifacts
+          path: registration-processor/target/
+          retention-days: 1
+
+  # Build and push Docker images
+  build-and-push:
+    needs: build-maven
+    runs-on: ubuntu-latest
+    if: ${{ needs.build-maven.outputs.services-to-build != '' }}
+    strategy:
+      matrix:
+        include:
+          - service_name: registration-processor-registration-transaction-service
+            service_path: registration-processor/post-processor/registration-processor-registration-transaction-service
+            port: 8081
+          - service_name: registration-processor-stage-group-1
+            service_path: registration-processor/stage-groups/registration-processor-stage-group-1
+            port: 8081
+          - service_name: registration-processor-stage-group-2
+            service_path: registration-processor/stage-groups/registration-processor-stage-group-2
+            port: 8081
+          - service_name: registration-processor-stage-group-3
+            service_path: registration-processor/stage-groups/registration-processor-stage-group-3
+            port: 8081
+          - service_name: registration-processor-stage-group-4
+            service_path: registration-processor/stage-groups/registration-processor-stage-group-4
+            port: 8081
+          - service_name: registration-processor-stage-group-5
+            service_path: registration-processor/stage-groups/registration-processor-stage-group-5
+            port: 8081
+          - service_name: registration-processor-stage-group-6
+            service_path: registration-processor/stage-groups/registration-processor-stage-group-6
+            port: 8081
+          - service_name: registration-processor-stage-group-7
+            service_path: registration-processor/stage-groups/registration-processor-stage-group-7
+            port: 8081
+          - service_name: registration-processor-abis
+            service_path: registration-processor/core-processor/registration-processor-abis
+            port: 8081
+          - service_name: registration-processor-reprocessor
+            service_path: registration-processor/workflow-engine/registration-processor-reprocessor
+            port: 8081
+          - service_name: registration-processor-dmz-packet-server
+            service_path: registration-processor/init/registration-processor-dmz-packet-server
+            port: 8081
+          - service_name: registration-processor-registration-status-service
+            service_path: registration-processor/init/registration-processor-registration-status-service
+            port: 8081
+          - service_name: registration-processor-notification-service
+            service_path: registration-processor/registration-processor-notification-service
+            port: 8081
+          - service_name: registration-processor-landing-zone
+            service_path: registration-processor/registration-processor-landing-zone
+            port: 8081
+          - service_name: registration-processor-workflow-manager-service
+            service_path: registration-processor/workflow-engine/registration-processor-workflow-manager-service
+            port: 8081
+          - service_name: registration-processor-common-camel-bridge
+            service_path: registration-processor/registration-processor-common-camel-bridge
+            port: 8081
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Maven artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: maven-artifacts
+          path: registration-processor/target/
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Create ECR repository if not exists
+        run: |
+          aws ecr describe-repositories --repository-names mosip-${{ matrix.service_name }} --region ${{ env.AWS_REGION }} || \
+          aws ecr create-repository --repository-name mosip-${{ matrix.service_name }} --region ${{ env.AWS_REGION }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service_path }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            SOURCE=github.com/mosip/registration
+            COMMIT_HASH=${{ github.sha }}
+            COMMIT_ID=${{ github.sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
+            spring_config_label=main
+            active_profile=dev
+            spring_config_url=http://config-server:8888
+            is_glowroot=absent
+            artifactory_url=http://artifactory:8081
+            iam_adapter_url=http://artifactory:8081/kernel-auth-adapter.jar
+            regproc_jars=artifactory/libs-release-local/regproc/
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Output image details
+        run: |
+          echo "Image: ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}"
+          echo "Tags: ${{ steps.meta.outputs.tags }}"
+          echo "Service: ${{ matrix.service_name }}"
+          echo "Port: ${{ matrix.port }}"

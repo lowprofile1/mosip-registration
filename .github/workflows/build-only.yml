@@ -1,0 +1,160 @@
+name: Build Only (No Push)
+
+on:
+  workflow_dispatch:
+    inputs:
+      service_name:
+        description: 'Specific service to build (or "all")'
+        required: false
+        default: 'all'
+        type: string
+      build_artifacts:
+        description: 'Build Maven artifacts'
+        required: false
+        default: true
+        type: boolean
+      build_docker:
+        description: 'Build Docker images (local only)'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  MAVEN_OPTS: -Dmaven.repo.local=.m2/repository
+
+jobs:
+  build-maven:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.build_artifacts }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Build Maven project
+        working-directory: ./registration-processor
+        run: |
+          mvn clean compile -DskipTests
+          mvn package -DskipTests
+
+      - name: List built artifacts
+        run: |
+          echo "=== Built JAR files ==="
+          find registration-processor -name "*.jar" -type f | head -20
+          echo ""
+          echo "=== JAR file sizes ==="
+          find registration-processor -name "*.jar" -type f -exec ls -lh {} \; | head -20
+
+      - name: Upload Maven artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-artifacts
+          path: registration-processor/target/
+          retention-days: 1
+
+  build-docker:
+    needs: build-maven
+    runs-on: ubuntu-latest
+    if: ${{ inputs.build_docker }}
+    strategy:
+      matrix:
+        include:
+          - service_name: registration-processor-workflow-manager-service
+            service_path: registration-processor/workflow-engine/registration-processor-workflow-manager-service
+            port: 8081
+          - service_name: registration-processor-stage-group-1
+            service_path: registration-processor/stage-groups/registration-processor-stage-group-1
+            port: 8081
+          - service_name: registration-processor-registration-status-service
+            service_path: registration-processor/init/registration-processor-registration-status-service
+            port: 8081
+          - service_name: registration-processor-notification-service
+            service_path: registration-processor/registration-processor-notification-service
+            port: 8081
+          - service_name: registration-processor-landing-zone
+            service_path: registration-processor/registration-processor-landing-zone
+            port: 8081
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Maven artifacts
+        if: ${{ inputs.build_artifacts }}
+        uses: actions/download-artifact@v4
+        with:
+          name: maven-artifacts
+          path: registration-processor/target/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (local only)
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service_path }}
+          push: false
+          tags: mosip-registration/${{ matrix.service_name }}:local-test
+          build-args: |
+            SOURCE=github.com/mosip/registration
+            COMMIT_HASH=local-test
+            COMMIT_ID=local-test
+            BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            spring_config_label=main
+            active_profile=dev
+            spring_config_url=http://config-server:8888
+            is_glowroot=absent
+            artifactory_url=http://artifactory:8081
+            iam_adapter_url=http://artifactory:8081/kernel-auth-adapter.jar
+            regproc_jars=artifactory/libs-release-local/regproc/
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test Docker image
+        run: |
+          echo "=== Testing Docker image ==="
+          docker run --rm mosip-registration/${{ matrix.service_name }}:local-test --help || echo "Image built successfully (help command not available)"
+          echo ""
+          echo "=== Image details ==="
+          docker images mosip-registration/${{ matrix.service_name }}:local-test
+          echo ""
+          echo "=== Image layers ==="
+          docker history mosip-registration/${{ matrix.service_name }}:local-test
+
+      - name: Clean up local images
+        if: always()
+        run: |
+          docker rmi mosip-registration/${{ matrix.service_name }}:local-test || true
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [build-maven, build-docker]
+    if: always()
+    steps:
+      - name: Build Summary
+        run: |
+          echo "=== Build Summary ==="
+          echo "Maven Build: ${{ needs.build-maven.result }}"
+          echo "Docker Build: ${{ needs.build-docker.result }}"
+          echo ""
+          echo "Services built:"
+          echo "- registration-processor-workflow-manager-service"
+          echo "- registration-processor-stage-group-1"
+          echo "- registration-processor-registration-status-service"
+          echo "- registration-processor-notification-service"
+          echo "- registration-processor-landing-zone"
+          echo ""
+          echo "Next steps:"
+          echo "1. Run 'Build and Push to ECR' workflow to push images to ECR"
+          echo "2. Run 'Deploy to Kubernetes' workflow to deploy to EKS"

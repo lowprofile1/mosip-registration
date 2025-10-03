@@ -1,0 +1,120 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_run:
+    workflows: ["Build and Push to ECR"]
+    types: [completed]
+    branches: [master, develop, main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - qa
+          - prod
+      services:
+        description: 'Services to deploy (comma-separated, or "all")'
+        required: false
+        default: 'all'
+        type: string
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER_NAME: mosip-ida-dev
+  ECR_REGISTRY: 921436147132.dkr.ecr.us-east-1.amazonaws.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    environment: ${{ inputs.environment || 'dev' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ env.EKS_CLUSTER_NAME }}
+
+      - name: Verify cluster connection
+        run: |
+          kubectl get nodes
+          kubectl get namespaces
+
+      - name: Create namespace if not exists
+        run: |
+          kubectl create namespace mosip-registration --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create secrets
+        run: |
+          # Create database secret
+          kubectl create secret generic mosip-registration-secrets \
+            --from-literal=DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+            --from-literal=DB_USERNAME="postgres" \
+            --namespace=mosip-registration \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy registration services
+        run: |
+          # Deploy all services or specific ones
+          if [ "${{ inputs.services || 'all' }}" = "all" ]; then
+            echo "Deploying all registration services..."
+            kubectl apply -f k8s/ -n mosip-registration
+          else
+            echo "Deploying specific services: ${{ inputs.services }}"
+            IFS=',' read -ra SERVICES <<< "${{ inputs.services }}"
+            for service in "${SERVICES[@]}"; do
+              service=$(echo "$service" | xargs) # trim whitespace
+              echo "Deploying $service..."
+              kubectl apply -f "k8s/$service.yaml" -n mosip-registration
+            done
+          fi
+
+      - name: Wait for deployments
+        run: |
+          echo "Waiting for deployments to be ready..."
+          kubectl wait --for=condition=available --timeout=300s deployment -l app.kubernetes.io/component=mosip-registration -n mosip-registration
+
+      - name: Get deployment status
+        run: |
+          echo "=== Deployment Status ==="
+          kubectl get deployments -n mosip-registration
+          echo ""
+          echo "=== Pod Status ==="
+          kubectl get pods -n mosip-registration
+          echo ""
+          echo "=== Services ==="
+          kubectl get services -n mosip-registration
+
+      - name: Check pod logs for errors
+        if: failure()
+        run: |
+          echo "=== Checking pod logs for errors ==="
+          kubectl get pods -n mosip-registration -o name | while read pod; do
+            echo "--- Logs for $pod ---"
+            kubectl logs $pod -n mosip-registration --tail=50 || true
+          done
+
+      - name: Output access information
+        run: |
+          echo "=== Access Information ==="
+          echo "Cluster: ${{ env.EKS_CLUSTER_NAME }}"
+          echo "Namespace: mosip-registration"
+          echo "Region: ${{ env.AWS_REGION }}"
+          echo ""
+          echo "To access services:"
+          echo "kubectl port-forward svc/<service-name> <local-port>:<service-port> -n mosip-registration"
+          echo ""
+          echo "To check logs:"
+          echo "kubectl logs -f deployment/<service-name> -n mosip-registration"

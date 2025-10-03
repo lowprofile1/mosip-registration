@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registration-processor-registration-status-service
+  namespace: mosip-registration
+  labels:
+    app: registration-processor-registration-status-service
+    app.kubernetes.io/component: mosip
+    app.kubernetes.io/part-of: registration-processor
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: registration-processor-registration-status-service
+  template:
+    metadata:
+      labels:
+        app: registration-processor-registration-status-service
+        app.kubernetes.io/component: mosip
+        app.kubernetes.io/part-of: registration-processor
+        version: v1
+    spec:
+      containers:
+        - name: registration-processor-registration-status-service
+          image: 921436147132.dkr.ecr.us-east-1.amazonaws.com/mosip-registration-processor-registration-status-service:latest
+          ports:
+            - containerPort: 8081
+              name: http
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "dev"
+            - name: SPRING_CLOUD_CONFIG_LABEL
+              value: "main"
+            - name: SPRING_CLOUD_CONFIG_URI
+              value: "http://config-server:8888"
+            - name: ARTIFACTORY_URL
+              value: "http://artifactory:8081"
+            - name: IAM_ADAPTER_URL
+              value: "http://artifactory:8081/kernel-auth-adapter.jar"
+            - name: IS_GLOWROOT
+              value: "absent"
+            - name: DB_HOST
+              value: "mosip-ida-dev-db.ckbisyiait0e.us-east-1.rds.amazonaws.com"
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: "mosip_regprc"
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mosip-registration-secrets
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mosip-registration-secrets
+                  key: DB_PASSWORD
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /registrationprocessor/v1/registrationstatus/actuator/health
+              port: 8081
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /registrationprocessor/v1/registrationstatus/actuator/health
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: logs
+              mountPath: /home/logs
+      volumes:
+        - name: logs
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registration-processor-registration-status-service
+  namespace: mosip-registration
+  labels:
+    app: registration-processor-registration-status-service
+    app.kubernetes.io/component: mosip
+    app.kubernetes.io/part-of: registration-processor
+spec:
+  selector:
+    app: registration-processor-registration-status-service
+  ports:
+    - protocol: TCP
+      port: 8081
+      targetPort: 8081
+      name: http
+  type: ClusterIP
