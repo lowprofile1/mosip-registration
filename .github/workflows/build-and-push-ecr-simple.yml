@@ -48,6 +48,13 @@ jobs:
             registration-processor/*/target/*.war
           retention-days: 1
 
+      - name: List uploaded artifacts
+        run: |
+          echo "Files being uploaded as artifacts:"
+          find registration-processor -name "*.jar" -type f | head -20
+          echo "Total JAR files found:"
+          find registration-processor -name "*.jar" -type f | wc -l
+
   # Download artifacts once for all services
   download-artifacts:
     needs: build-maven
@@ -64,10 +71,15 @@ jobs:
 
       - name: List downloaded artifacts
         run: |
+          echo "Current directory:"
+          pwd
           echo "Artifacts directory structure:"
+          ls -la ./artifacts/ || echo "artifacts directory not found"
           find ./artifacts -type f -name "*.jar" | head -20
           echo "Total JAR files found:"
           find ./artifacts -type f -name "*.jar" | wc -l
+          echo "All files in artifacts directory:"
+          find ./artifacts -type f | head -20
 
       - name: Upload artifacts for Docker builds
         uses: actions/upload-artifact@v4
@@ -105,6 +117,15 @@ jobs:
           name: maven-artifacts-for-docker
           path: ./artifacts
 
+      - name: Debug artifacts location
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Artifacts directory contents:"
+          ls -la ./artifacts/ || echo "artifacts directory not found"
+          echo "All JAR files in artifacts:"
+          find ./artifacts -name "*.jar" -type f || echo "No JAR files found"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -124,7 +145,7 @@ jobs:
 
           # Find the main JAR file (not javadoc or sources)
           JAR_FILE=$(find ../../artifacts -name "*${{ matrix.service_name }}*.jar" | grep -v javadoc | grep -v sources | head -1)
-          
+
           if [ -z "$JAR_FILE" ]; then
             echo "No JAR file found for ${{ matrix.service_name }}"
             echo "Available files in artifacts directory:"
