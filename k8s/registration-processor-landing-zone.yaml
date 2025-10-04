@@ -23,7 +23,7 @@ spec:
     spec:
       containers:
         - name: registration-processor-landing-zone
-          image: mosip-registration/registration-processor-landing-zone:local-test
+          image: 921436147132.dkr.ecr.us-east-1.amazonaws.com/mosip-registration-processor-landing-zone:latest
           ports:
             - containerPort: 8081
               name: http

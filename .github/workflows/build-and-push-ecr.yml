@@ -29,6 +29,9 @@ jobs:
           - service_name: registration-processor-notification-service
             service_path: registration-processor/registration-processor-notification-service
             port: 8081
+          - service_name: registration-processor-landing-zone
+            service_path: registration-processor/registration-processor-landing-zone
+            port: 8081
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -112,7 +115,7 @@ jobs:
           if [ ! -d "$SERVICE_TARGET_DIR" ]; then
             mkdir -p "$SERVICE_TARGET_DIR"
           fi
-          
+
           # Copy the JAR file to the service target directory only if it's not already there
           JAR_FILENAME=$(basename "$JAR_FILE")
           if [ ! -f "$SERVICE_TARGET_DIR/$JAR_FILENAME" ]; then

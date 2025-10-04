@@ -54,7 +54,8 @@ kubectl apply -f registration-processor-landing-zone.yaml
 
 # Wait for deployments
 echo "⏳ Waiting for deployments to be ready..."
-kubectl wait --for=condition=available --timeout=300s deployment -l app.kubernetes.io/component=mosip -n mosip-registration
+kubectl wait --for=condition=available --timeout=300s deployment -l app.kubernetes.io/component=mosip -n mosip-registration || echo "No deployments found with mosip component label, trying with part-of label..."
+kubectl wait --for=condition=available --timeout=300s deployment -l app.kubernetes.io/part-of=registration-processor -n mosip-registration
 
 # Display status
 echo ""
