@@ -91,7 +91,7 @@
 							<goal>repackage</goal>
 						</goals>
 						<configuration>
-							<attach>false</attach>
+							<attach>true</attach>
 						</configuration>
 					</execution>
 				</executions>

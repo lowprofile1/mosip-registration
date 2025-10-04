@@ -54,6 +54,9 @@ ENV is_glowroot_env=${is_glowroot}
 # environment variable to pass artifactory url, at docker runtime
 ENV artifactory_url_env=${artifactory_url}
 
+# environment variable to pass iam_adapter url, at docker runtime
+ENV iam_adapter_url_env=${iam_adapter_url}
+
 # install packages and create user
 RUN apt-get -y update \
 && apt-get install -y unzip sudo \
@@ -86,7 +89,7 @@ ADD ./target/${group_name}-*.jar ${group_name}.jar
 RUN chown -R ${container_user}:${container_user} /home/${container_user}
 
 # select container user for all tasks
-#USER ${container_user_uid}:${container_user_gid}
+USER ${container_user_uid}:${container_user_gid}
 
 CMD if [ "$is_glowroot_env" = "present" ]; then \
     wget "${iam_adapter_url_env}" -O "${loader_path_env}"/kernel-auth-adapter.jar; \
