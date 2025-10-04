@@ -112,9 +112,15 @@ jobs:
           if [ ! -d "$SERVICE_TARGET_DIR" ]; then
             mkdir -p "$SERVICE_TARGET_DIR"
           fi
-
-          # Copy the JAR file to the service target directory
-          cp "$JAR_FILE" "$SERVICE_TARGET_DIR/"
+          
+          # Copy the JAR file to the service target directory only if it's not already there
+          JAR_FILENAME=$(basename "$JAR_FILE")
+          if [ ! -f "$SERVICE_TARGET_DIR/$JAR_FILENAME" ]; then
+            cp "$JAR_FILE" "$SERVICE_TARGET_DIR/"
+            echo "Copied JAR file to service target directory"
+          else
+            echo "JAR file already exists in service target directory"
+          fi
 
           # List files in service target directory for debugging
           echo "Files in service target directory:"
