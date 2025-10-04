@@ -54,8 +54,7 @@ jobs:
       - name: Build Maven project
         working-directory: ./registration-processor
         run: |
-          mvn clean compile -DskipTests
-          mvn package -DskipTests
+          mvn clean package -DskipTests
 
       - name: Verify JAR file exists
         run: |
@@ -139,4 +138,4 @@ jobs:
           docker push ${{ env.ECR_REGISTRY }}/mosip-${{ matrix.service_name }}:latest
 
           echo "Successfully built and pushed ${{ matrix.service_name }}"
-          echo "Workflow version: 2025-01-03-fixed"
+          echo "Workflow version: 2025-01-04-jar-fix"
