@@ -333,3 +333,4 @@ kubectl logs -f -l app.kubernetes.io/component=mosip -n mosip-registration
 **Status**: ✅ **Ready for Deployment**
 **Last Updated**: October 2025
 **Version**: 1.2.1.2
+

@@ -23,7 +23,7 @@ spec:
     spec:
       containers:
         - name: registration-processor-workflow-manager-service
-          image: 921436147132.dkr.ecr.us-east-1.amazonaws.com/mosip-registration-processor-workflow-manager-service:latest
+          image: mosip-registration/registration-processor-workflow-manager-service:local-test
           ports:
             - containerPort: 8081
               name: http

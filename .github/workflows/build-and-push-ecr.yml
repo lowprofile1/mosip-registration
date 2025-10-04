@@ -112,7 +112,7 @@ jobs:
           if [ ! -d "$SERVICE_TARGET_DIR" ]; then
             mkdir -p "$SERVICE_TARGET_DIR"
           fi
-          
+
           # Copy the JAR file to the service target directory
           cp "$JAR_FILE" "$SERVICE_TARGET_DIR/"
 

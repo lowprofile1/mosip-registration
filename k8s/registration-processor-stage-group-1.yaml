@@ -23,7 +23,7 @@ spec:
     spec:
       containers:
         - name: registration-processor-stage-group-1
-          image: 921436147132.dkr.ecr.us-east-1.amazonaws.com/mosip-registration-processor-stage-group-1:latest
+          image: mosip-registration/registration-processor-stage-group-1:local-test
           ports:
             - containerPort: 8081
               name: http

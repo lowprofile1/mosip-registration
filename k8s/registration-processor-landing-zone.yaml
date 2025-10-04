@@ -1,29 +1,29 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: registration-processor-registration-status-service
+  name: registration-processor-landing-zone
   namespace: mosip-registration
   labels:
-    app: registration-processor-registration-status-service
+    app: registration-processor-landing-zone
     app.kubernetes.io/component: mosip
     app.kubernetes.io/part-of: registration-processor
     version: v1
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
-      app: registration-processor-registration-status-service
+      app: registration-processor-landing-zone
   template:
     metadata:
       labels:
-        app: registration-processor-registration-status-service
+        app: registration-processor-landing-zone
         app.kubernetes.io/component: mosip
         app.kubernetes.io/part-of: registration-processor
         version: v1
     spec:
       containers:
-        - name: registration-processor-registration-status-service
-          image: mosip-registration/registration-processor-registration-status-service:local-test
+        - name: registration-processor-landing-zone
+          image: mosip-registration/registration-processor-landing-zone:local-test
           ports:
             - containerPort: 8081
               name: http
@@ -58,22 +58,22 @@ spec:
                   key: DB_PASSWORD
           resources:
             requests:
-              memory: "512Mi"
-              cpu: "250m"
-            limits:
               memory: "1Gi"
               cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
           livenessProbe:
             httpGet:
-              path: /registrationprocessor/v1/registrationstatus/actuator/health
+              path: /registrationprocessor/v1/landingzone/actuator/health
               port: 8081
-            initialDelaySeconds: 60
+            initialDelaySeconds: 120
             periodSeconds: 30
             timeoutSeconds: 10
             failureThreshold: 6
           readinessProbe:
             httpGet:
-              path: /registrationprocessor/v1/registrationstatus/actuator/health
+              path: /registrationprocessor/v1/landingzone/actuator/health
               port: 8081
             initialDelaySeconds: 30
             periodSeconds: 10
@@ -82,22 +82,26 @@ spec:
           volumeMounts:
             - name: logs
               mountPath: /home/logs
+            - name: landing-zone
+              mountPath: /home/ftp1/LANDING_ZONE
       volumes:
         - name: logs
+          emptyDir: {}
+        - name: landing-zone
           emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: registration-processor-registration-status-service
+  name: registration-processor-landing-zone
   namespace: mosip-registration
   labels:
-    app: registration-processor-registration-status-service
+    app: registration-processor-landing-zone
     app.kubernetes.io/component: mosip
     app.kubernetes.io/part-of: registration-processor
 spec:
   selector:
-    app: registration-processor-registration-status-service
+    app: registration-processor-landing-zone
   ports:
     - protocol: TCP
       port: 8081

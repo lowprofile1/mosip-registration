@@ -50,6 +50,7 @@ kubectl apply -f registration-processor-workflow-manager-service.yaml
 kubectl apply -f registration-processor-stage-group-1.yaml
 kubectl apply -f registration-processor-registration-status-service.yaml
 kubectl apply -f registration-processor-notification-service.yaml
+kubectl apply -f registration-processor-landing-zone.yaml
 
 # Wait for deployments
 echo "⏳ Waiting for deployments to be ready..."

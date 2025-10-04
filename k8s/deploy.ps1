@@ -81,3 +81,4 @@ Write-Host "🔧 Useful Commands:" -ForegroundColor Yellow
 Write-Host "  kubectl logs -f deployment/registration-processor-workflow-manager-service -n mosip-registration"
 Write-Host "  kubectl port-forward svc/registration-processor-workflow-manager-service 8081:8081 -n mosip-registration"
 Write-Host "  kubectl get events -n mosip-registration --sort-by='.lastTimestamp'"
+

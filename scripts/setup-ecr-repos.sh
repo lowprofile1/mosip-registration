@@ -79,3 +79,4 @@ echo "3. Deploy to Kubernetes using 'Deploy to Kubernetes' workflow"
 echo ""
 echo "🌐 ECR Registry: $ECR_REGISTRY"
 echo "📍 Region: $AWS_REGION"
+
