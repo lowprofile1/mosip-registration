@@ -88,6 +88,7 @@
 				<configuration>
 					<executable>true</executable>
 					<layout>ZIP</layout>
+					<attach>true</attach>
 				</configuration>
 				<executions>
 					<execution>
@@ -95,9 +96,6 @@
 							<goal>build-info</goal>
 							<goal>repackage</goal>
 						</goals>
-						<configuration>
-							<attach>true</attach>
-						</configuration>
 					</execution>
 				</executions>
 			</plugin>
