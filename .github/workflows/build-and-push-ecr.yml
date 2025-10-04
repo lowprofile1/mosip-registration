@@ -57,12 +57,20 @@ jobs:
       - name: Verify JAR file exists
         run: |
           echo "Looking for JAR file for ${{ matrix.service_name }}"
+          echo "Current directory: $(pwd)"
+          echo "Contents of registration-processor directory:"
+          ls -la ./registration-processor/
+          echo "Contents of service target directory:"
+          ls -la ./${{ matrix.service_path }}/target/ || echo "Target directory not found"
+          echo "Searching for JAR files:"
           find ./registration-processor -name "*${{ matrix.service_name }}*.jar" -type f | grep -v javadoc | grep -v sources
           JAR_FILE=$(find ./registration-processor -name "*${{ matrix.service_name }}*.jar" -type f | grep -v javadoc | grep -v sources | head -1)
           if [ -z "$JAR_FILE" ]; then
             echo "No JAR file found for ${{ matrix.service_name }}"
             echo "Available JAR files:"
             find ./registration-processor -name "*.jar" -type f | head -20
+            echo "Checking if JAR files are in service target directory:"
+            find ./${{ matrix.service_path }}/target/ -name "*.jar" -type f 2>/dev/null || echo "No JAR files in service target"
             exit 1
           fi
           echo "Found JAR file: $JAR_FILE"
@@ -92,20 +100,25 @@ jobs:
             echo "No JAR file found for ${{ matrix.service_name }}"
             echo "Available JAR files:"
             find ./registration-processor -name "*.jar" -type f | head -20
+            echo "Checking service target directory:"
+            find ./${{ matrix.service_path }}/target/ -name "*.jar" -type f 2>/dev/null || echo "No JAR files in service target"
             exit 1
           fi
 
           echo "Found JAR file: $JAR_FILE"
 
-          # Verify JAR file exists in the service directory
-          if [ ! -f "$JAR_FILE" ]; then
-            echo "JAR file not found at: $JAR_FILE"
-            exit 1
+          # Copy JAR file to service target directory if it's not already there
+          SERVICE_TARGET_DIR="./${{ matrix.service_path }}/target"
+          if [ ! -d "$SERVICE_TARGET_DIR" ]; then
+            mkdir -p "$SERVICE_TARGET_DIR"
           fi
+          
+          # Copy the JAR file to the service target directory
+          cp "$JAR_FILE" "$SERVICE_TARGET_DIR/"
 
           # List files in service target directory for debugging
           echo "Files in service target directory:"
-          ls -la ./${{ matrix.service_path }}/target/
+          ls -la "$SERVICE_TARGET_DIR/"
 
           # Build Docker image from service directory
           cd ./${{ matrix.service_path }}
