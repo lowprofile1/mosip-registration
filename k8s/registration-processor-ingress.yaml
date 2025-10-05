@@ -1,0 +1,175 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: registration-processor-ingress
+  namespace: mosip-registration
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+spec:
+  rules:
+    - host: registration.mosip.local
+      http:
+        paths:
+          # Workflow Manager Service
+          - path: /registrationprocessor/v1/workflow
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-workflow-manager-service
+                port:
+                  number: 8081
+
+          # Stage Group 1 Service
+          - path: /registrationprocessor/v1/stagegroup1
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-stage-group-1
+                port:
+                  number: 8081
+
+          # Registration Status Service
+          - path: /registrationprocessor/v1/registrationstatus
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-registration-status-service
+                port:
+                  number: 8081
+
+          # Notification Service
+          - path: /registrationprocessor/v1/notification
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-notification-service
+                port:
+                  number: 8081
+
+          # Landing Zone Service
+          - path: /registrationprocessor/v1/landingzone
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-landing-zone
+                port:
+                  number: 8081
+
+          # Health Check endpoints
+          - path: /registrationprocessor/v1/health
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-workflow-manager-service
+                port:
+                  number: 8081
+
+          # Default route to workflow manager
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-workflow-manager-service
+                port:
+                  number: 8081
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: registration-processor-ingress-tls
+  namespace: mosip-registration
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+    - hosts:
+        - registration.mosip.example.com
+      secretName: registration-processor-tls
+  rules:
+    - host: registration.mosip.example.com
+      http:
+        paths:
+          # Workflow Manager Service
+          - path: /registrationprocessor/v1/workflow
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-workflow-manager-service
+                port:
+                  number: 8081
+
+          # Stage Group 1 Service
+          - path: /registrationprocessor/v1/stagegroup1
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-stage-group-1
+                port:
+                  number: 8081
+
+          # Registration Status Service
+          - path: /registrationprocessor/v1/registrationstatus
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-registration-status-service
+                port:
+                  number: 8081
+
+          # Notification Service
+          - path: /registrationprocessor/v1/notification
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-notification-service
+                port:
+                  number: 8081
+
+          # Landing Zone Service
+          - path: /registrationprocessor/v1/landingzone
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-landing-zone
+                port:
+                  number: 8081
+
+          # Health Check endpoints
+          - path: /registrationprocessor/v1/health
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-workflow-manager-service
+                port:
+                  number: 8081
+
+          # Default route to workflow manager
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: registration-processor-workflow-manager-service
+                port:
+                  number: 8081
